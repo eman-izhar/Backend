@@ -2,10 +2,11 @@ const express = require("express");
 const multer = require("multer"); //for file upload
 const uploadFile = require("./services/storage.service"); //import the uploadFile function from storage.service.js
 const postModel = require("./models/post.model"); //import the post model
-
+const cors = require("cors")
 
 const app = express(); // app ka instance ..
 app.use(express.json()); //middleware
+app.use(cors())
 const upload = multer({ storage: multer.memoryStorage() }); //memory mai store karna hai ... memoryStorage() ka matlab hai ki file ko memory mai store karna hai
 
 //api for creating a post

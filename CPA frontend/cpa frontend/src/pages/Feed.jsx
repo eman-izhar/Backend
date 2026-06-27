@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import axios from "axios"
 import {
   Heart,
   MessageCircle,
@@ -66,13 +67,50 @@ const MOCK_POSTS = [
   },
 ];
 
+// Backend sometimes won't send every field (name, initials, time, likes, comments).
+// This fills in safe defaults so the UI never breaks on missing data,
+// and maps Mongo's "_id" to the "id" the rest of the component relies on.
+const normalizePost = (p, idx) => ({
+  id: p.id ?? p._id ?? idx,
+  name: p.name || 'Unknown',
+  initials: p.initials || (p.name ? p.name.slice(0, 2).toUpperCase() : 'U'),
+  time: p.time || 'now',
+  caption: p.caption || '',
+  image: p.image || null,
+  likes: typeof p.likes === 'number' ? p.likes : 0,
+  comments: typeof p.comments === 'number' ? p.comments : 0,
+});
+
 const Feed = ({ onCompose = () => {} }) => {
   const [loaded, setLoaded] = useState(false);
+  const [mockPosts, setMockPosts] = useState(MOCK_POSTS);
   const [posts, setPosts] = useState(
-    MOCK_POSTS.map((p) => ({ ...p, liked: false, saved: false, likeCount: p.likes, burst: false }))
+    mockPosts.map((p) => ({ ...p, liked: false, saved: false, likeCount: p.likes, burst: false }))
   );
   const [openMenuId, setOpenMenuId] = useState(null);
   const burstTimers = useRef({});
+
+  useEffect(() => {
+    axios
+      .get("http://localhost:3000/get-posts")
+      .then((res) => {
+        console.log("API response:", res.data);
+        // Backend sends { message, posts }, NOT { mockPosts } — fixed key below.
+        if (res?.data?.posts) {
+          const normalized = res.data.posts.map((p, idx) => normalizePost(p, idx));
+          setMockPosts(normalized);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to fetch feed posts:", err);
+      });
+  }, []);
+
+  useEffect(() => {
+    setPosts(
+      mockPosts.map((p) => ({ ...p, liked: false, saved: false, likeCount: p.likes, burst: false }))
+    );
+  }, [mockPosts]);
 
   useEffect(() => {
     const t = setTimeout(() => setLoaded(true), 650);

@@ -1,5 +1,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { ImagePlus, X, Loader2, Check, ArrowRight } from 'lucide-react';
+import axios from "axios"
+import { useNavigate } from 'react-router-dom';
 
 const COLORS = {
   bg: '#EEF2F6',
@@ -16,7 +18,9 @@ const COLORS = {
 const MAX_CAPTION = 280;
 
 const CreatePost = () => {
-  const [image, setImage] = useState(null); // { url, name }
+  const navigate = useNavigate(); // ✅ hook now lives INSIDE the component
+
+  const [image, setImage] = useState(null); // { url, name, file }
   const [caption, setCaption] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const [status, setStatus] = useState('idle'); // idle | posting | posted
@@ -35,7 +39,12 @@ const CreatePost = () => {
     }
     setError('');
     const url = URL.createObjectURL(file);
-    setImage({ url, name: file.name });
+    // keep the real File object too — we need it later for the upload,
+    // since the native <input type="file"> gets cleared right after selection.
+    setImage((prev) => {
+      if (prev?.url) URL.revokeObjectURL(prev.url);
+      return { url, name: file.name, file };
+    });
   }, []);
 
   const onInputChange = (e) => {
@@ -51,6 +60,7 @@ const CreatePost = () => {
 
   const removeImage = (e) => {
     e.stopPropagation();
+    if (image?.url) URL.revokeObjectURL(image.url);
     setImage(null);
   };
 
@@ -59,15 +69,34 @@ const CreatePost = () => {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!canPost) return;
+    setError('');
     setStatus('posting');
-    setTimeout(() => {
-      setStatus('posted');
-      setTimeout(() => {
+
+    // Build FormData manually (not from the form element) because the
+    // file input's value is intentionally cleared on selection — relying
+    // on it here would silently send an empty file field.
+    const formData = new FormData();
+    formData.append('caption', caption);
+    if (image?.file) {
+      formData.append('image', image.file);
+    }
+
+    axios
+      .post('http://localhost:3000/create-post', formData)
+      .then(() => {
+        setStatus('posted');
+        setTimeout(() => {
+          setStatus('idle');
+          setImage(null);
+          setCaption('');
+          navigate('/feed');
+        }, 1200);
+      })
+      .catch((err) => {
+        console.error('Failed to create post:', err);
+        setError('Something went wrong while posting. Please try again.');
         setStatus('idle');
-        setImage(null);
-        setCaption('');
-      }, 1700);
-    }, 1100);
+      });
   };
 
   const remaining = MAX_CAPTION - caption.length;
